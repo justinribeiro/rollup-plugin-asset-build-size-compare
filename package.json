@@ -8,7 +8,7 @@
   "scripts": {
     "test": "eslint"
   },
-  "repository": "ju/rollup-plugin-size",
+  "repository": "https://github.com/justinribeiro/rollup-plugin-asset-build-size-compare",
   "contributors": [
     {
       "name": "Wesley Luyten",
