@@ -1,4 +1,6 @@
-# \rollup-plugin-asset-build-size-compare
+[![npm version](https://badge.fury.io/js/@justinribeiro%2Frollup-plugin-asset-build-size-compare.svg)](https://badge.fury.io/js/@justinribeiro%2Frollup-plugin-asset-build-size-compare)
+
+# rollup-plugin-asset-build-size-compare
 
 > Track asset build sizes and compare over time with Rollup. A opinionated and modified version of Wes's [rollup-plugin-size](https://github.com/luwes/rollup-plugin-size), which was the rollup port of Jason's webpack [size-plugin](https://github.com/GoogleChromeLabs/size-plugin)
 
