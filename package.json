@@ -1,14 +1,21 @@
 {
-  "name": "rollup-plugin-size",
-  "version": "0.3.1",
-  "description": "Track compressed Rollup asset sizes over time.",
+  "name": "@justinribeiro/rollup-plugin-asset-build-size-compare",
+  "version": "1.0.0",
+  "description": "Track asset build sizes and compare over time with Rollup.",
+  "author": "Justin Ribeiro <justin@justinribeiro.com>",
   "type": "module",
-  "main": "rollup-plugin-size.js",
+  "main": "rollup-plugin-asset-build-size-compare.js",
   "scripts": {
     "test": "eslint"
   },
-  "repository": "luwes/rollup-plugin-size",
-  "author": "Wesley Luyten <me@wesleyluyten.com> (https://wesleyluyten.com)",
+  "repository": "ju/rollup-plugin-size",
+  "contributors": [
+    {
+      "name": "Wesley Luyten",
+      "email": "me@wesleyluyten.com",
+      "url": "https://wesleyluyten.com"
+    }
+  ],
   "license": "Apache-2.0",
   "dependencies": {
     "axios": "^1.2.2",

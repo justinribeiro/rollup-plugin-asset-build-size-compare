@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC
+ * Copyright 2025 Justin Ribeiro
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,7 +23,6 @@ import zlib from 'zlib';
 import prettyBytes from 'pretty-bytes';
 import fs from 'fs-extra';
 import { toMap, dedupe, toFileMap } from './utils.js';
-import { publishSizes, publishDiff } from './publish-size.js';
 const glob = promisify(globPromise);
 
 const GZIP_OPTS = {
@@ -40,7 +39,6 @@ const defaults = {
   pattern: '**/*.{mjs,js,jsx,css,html}',
   exclude: undefined,
   writeFile: true,
-  publish: false,
   columnWidth: 20
 };
 /**
@@ -50,13 +48,12 @@ const defaults = {
  * @param {string} [options.pattern] minimatch pattern of files to track
  * @param {string} [options.exclude] minimatch pattern of files NOT to track
  * @param {string} [options.filename] file name to save filesizes to disk
- * @param {boolean} [options.publish] option to publish filesizes to size-plugin-store
  * @param {boolean} [options.writeFile] option to save filesizes to disk
  */
 function bundleSize(_options) {
   const options = Object.assign(defaults, _options);
   let { pattern, exclude, compression } = options;
-  options.filename = options.filename || 'size-plugin.json';
+  options.filename = options.filename || `.rollup-plugin-asset-build-size-compare-data-${options.compression}.json`;
   const filename = path.join(process.cwd(), options.filename);
   let initialSizes;
   let isSingleChunk;
@@ -134,7 +131,6 @@ function bundleSize(_options) {
 
   async function writeToDisk(filename, stats) {
     if (
-      process.env.NODE_ENV === 'production' &&
       stats.files.some(file => file.diff !== 0)
     ) {
       const data = await readFromDisk(filename);
@@ -143,7 +139,6 @@ function bundleSize(_options) {
         await fs.ensureFile(filename);
         await fs.writeJSON(filename, data);
       }
-      options.publish && (await publishSizes(data, options.filename));
     }
   }
 
@@ -157,7 +152,6 @@ function bundleSize(_options) {
         diff: file.size - file.sizeBefore
       }))
     };
-    options.publish && (await publishDiff(stats, options.filename));
     options.save && (await options.save(stats));
     await writeToDisk(filename, stats);
   }
@@ -188,7 +182,7 @@ function bundleSize(_options) {
       const delta = size - sizeBefore;
       const msg = new Array(width - name.length + 2).join(' ') + name + ' ⏤  ';
       const color =
-        size > 100 * 1024
+        size > 75 * 1024
           ? 'red'
           : size > 40 * 1024
           ? 'yellow'
@@ -206,6 +200,8 @@ function bundleSize(_options) {
           deltaText = chalk.green(deltaText);
         }
         sizeText += ` (${deltaText})`;
+      } else {
+        sizeText += ` (no change)`;
       }
       const text = msg + sizeText + '\n';
       const item = {
@@ -228,14 +224,15 @@ function bundleSize(_options) {
     if (output) {
       if (isSingleChunk) {
         // Remove newline for single file output.
-        output = output.trimRight();
+        output = output.trimEnd();
       }
+      console.log(`Measured Delta in Asset Build Size - (using ${defaults.compression})`);
       console.log(output);
     }
   }
 
   return {
-    name: 'rollup-plugin-size',
+    name: 'rollup-plugin-asset-build-size-compare',
     generateBundle
   };
 }
