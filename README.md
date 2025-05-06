@@ -7,6 +7,8 @@
 ## Features
 
 - Allows tracking build asset sizes, in either gzip, brotli, or no compression at all (don't ship your stuff that way!)
+- Sets more sane compression defaults based on
+- Allows setting custom compression targets to better match your web server compression settings
 - Writes a file to disk for easy tracking of size over time (e.g., .rollup-plugin-asset-build-size-compare-data-${options.compression}.json)
 - Color codes asset file sizes in out (red > 75kB, yellow > 40kB, cyan > 20kB, green < 20kB) to remind you that performance matters (and you should care)
 
@@ -18,7 +20,7 @@ Install `justinribeiro@/rollup-plugin-asset-build-size-compare` as a development
 npm i -D justinribeiro@/rollup-plugin-asset-build-size-compare
 ```
 
-## Usage
+## Quick Start
 
 Add the plugin to your rollup configuration:
 
@@ -33,11 +35,11 @@ plugins: [
 
 For first time run, you'll get and initial set of sizes:
 
-![An initial run of the plugin](https://github.com/user-attachments/assets/eae29e3b-8300-45ab-87f7-d6796fcee563)
+![An initial run of the plugin](https://github.com/user-attachments/assets/f451032b-b3a7-4af3-b19b-b8c81afa5df5)
 
-For second runs, you'll get the change in those sizes:
+For additional runs, you'll get the change in those sizes (or no change in the example case as we did not edit anything):
 
-![A second run, showing no change in size](https://github.com/user-attachments/assets/e8cf29bd-656b-4667-ac68-d1b1d8f73ca9)
+![A second run, showing no change in size](https://github.com/user-attachments/assets/79299735-d3c5-49f9-8f6d-9f8193fc7aef)
 
 ## Options
 
@@ -45,19 +47,25 @@ You can set various options within the plugin.
 ```
 size({
   compression: 'brotli',
+  compressionLevel: 6,
   pattern: '**/*.{mjs,js,jsx,css,html}',
-  exclude: undefined,
+  exclude: 'vendor/**',
+  filename: '.rollup-plugin-asset-build-size-compare-data-brotli.json',
   writeFile: true,
+  columnWidth: 20,
 });
 ```
 
-| Name           | Description                                                      | Default |
-| -------------- | ---------------------------------------------------------------- | ------- |
-| `compression`  | The compression to run on the build assets ('none' | 'gzip' | 'brotli') | `gzip`|
-| `pattern`      | The minimatch pattern of files within the build assets you want to track | `**/*.{mjs,js,jsx,css,html}` |
-| `exclude`      | The minimatch pattern of files within the build assets you DO NOT want to track | `undefined` |
-| `filename`    | The file name to save build asset file sizes to disk  | `.rollup-plugin-asset-build-size-compare-data-${options.compression}.json` |
-| `writeFile` | Whether to write the build asset files sizes to disk. | `true` |
+| Option                   | Description                                                                                        | Default                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `compression`            | The compression algorithm to run on the build assets. One of `'none'`, `'gzip'`, or `'brotli'`.    | `'gzip'`                                                                     |
+| `compressionLevel`   | Compression level to use for gzip (range: 1–9) or brotli (range: 1–11)                                 | `6`                                                                          |
+| `pattern`                | Minimatch pattern to include files from the build assets.                                          | `'**/*.{mjs,js,jsx,css,html}'`                                               |
+| `exclude`                | Minimatch pattern to exclude files from the build assets.                                          | `undefined`                                                                  |
+| `filename`               | The file name to write asset size data to disk. Supports template string `${options.compression}`. | `'.rollup-plugin-asset-build-size-compare-data-${options.compression}.json'` |
+| `writeFile`              | Whether to write the asset size data file to disk.                                                 | `true`                                                                       |
+| `columnWidth`            | The number of characters used for column width in console output.                                  | `20`                                                                         |
+
 
 ## License
 

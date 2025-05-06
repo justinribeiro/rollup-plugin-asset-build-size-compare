@@ -1,70 +1,146 @@
-/**
- * Copyright 2025 Justin Ribeiro
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
-
+// @ts-check
 import path from 'path';
 import chalk from 'chalk';
-import { promisify } from 'util';
+import { promisify } from 'node:util';
 import globPromise from 'glob';
 import minimatch from 'minimatch';
-import zlib from 'zlib';
+import zlib from 'node:zlib';
 import prettyBytes from 'pretty-bytes';
 import fs from 'fs-extra';
-import { toMap, dedupe, toFileMap } from './utils.js';
 const glob = promisify(globPromise);
 
-const GZIP_OPTS = {
-  level: 9
-};
-const BROTLI_OPTS = {
-  params: {
-    [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY
-  }
+/**
+ * @typedef {import('rollup').OutputOptions} OutputOptions
+ * @typedef {import('rollup').OutputBundle} OutputBundle
+ */
+
+/**
+ * @typedef {Object} AssetBuildSizeCompareOptions
+ * @property {'none' | 'gzip' | 'brotli'} compression - The compression
+ * algorithm to run on the build assets. Default: `'gzip'`.
+ * @property {number} compressionLevel - Compression level; gzip (1–9) or brotli
+ * (1-11). Default: `6`.
+ * @property {string} pattern - Minimatch pattern of files to include from the
+ * build assets. Default: `'{mjs,js,jsx,css,html}'`.
+ * @property {string} exclude - Minimatch pattern of files to exclude from the
+ * build assets.
+ * @property {string} filename - Filename to save build asset sizes to disk.
+ * Default:
+ * `'.rollup-plugin-asset-build-size-compare-data-${options.compression}.json'`.
+ * @property {boolean} writeFile - Whether to write build asset sizes to disk.
+ * Default: `true`.
+ * @property {number} columnWidth - Character width for console output
+ * formatting. Default: `20`.
+ */
+
+/**
+ * A collection of utility functions for working with arrays and file data.
+ */
+const __utils = {
+  /**
+   * Converts two parallel arrays (names and values) into an object map.
+   *
+   * @param {string[]} names - The array of keys.
+   * @param {any[]} values - The array of values corresponding to each key.
+   * @returns {{ [key: string]: any }} An object mapping each name to its
+   * corresponding value.
+   */
+  toMap: (names, values) => {
+    return names.reduce((map, name, i) => {
+      map[name] = values[i];
+      return map;
+    }, {});
+  },
+
+  /**
+   * Returns true if the item is the first occurrence in the array (used for
+   * filtering duplicates).
+   *
+   * @param {any} item - The current item.
+   * @param {number} index - The current index.
+   * @param {any[]} arr - The full array.
+   * @returns {boolean} True if the item is not a duplicate, otherwise false.
+   */
+  dedupe: (item, index, arr) => {
+    return arr.indexOf(item) === index;
+  },
+
+  /**
+   * Converts an array of file objects into a map of filenames to file sizes,
+   * excluding zero-size files.
+   *
+   * @param {{ filename: string, size: number }[]} files - The array of file
+   * objects.
+   * @returns {{ [filename: string]: number }} An object mapping filenames to
+   * their sizes.
+   */
+  toFileMap: (files) => {
+    return files.reduce((result, file) => {
+      if (file.size) {
+        // exclude zero-size files
+        result[file.filename] = file.size;
+      }
+      return result;
+    }, {});
+  },
 };
 
-const defaults = {
-  compression: 'gzip',
-  pattern: '**/*.{mjs,js,jsx,css,html}',
-  exclude: undefined,
-  writeFile: true,
-  columnWidth: 20
-};
 /**
- * Size Plugin for Rollup
- * @param {Object} options
- * @param {'none' | 'gzip' | 'brotli'} [options.compression = 'gzip'] change the compression algorithm used for calculated sizes
- * @param {string} [options.pattern] minimatch pattern of files to track
- * @param {string} [options.exclude] minimatch pattern of files NOT to track
- * @param {string} [options.filename] file name to save filesizes to disk
- * @param {boolean} [options.writeFile] option to save filesizes to disk
+ * Asset Build Size Plugin for Rollup
+ * @param {AssetBuildSizeCompareOptions} [args] - Configuration options for asset
+ * size comparison.
+ * @returns {{ name: string, generateBundle: (outputOptions:
+ *   OutputOptions, bundle: OutputBundle) =>
+ *   Promise<void> }} Plugin object with Rollup lifecycle hooks.
  */
-function bundleSize(_options) {
-  const options = Object.assign(defaults, _options);
+function bundleSize(args) {
+  /** @type {AssetBuildSizeCompareOptions} */
+  const __defaultOptions = {
+    compression: 'gzip',
+    /**
+     * Gzip Range 1 - 9; Brief study of data (N = 970) from GitHub NGINX setting
+     * show Mode at 6
+     * Brotli Range 1 - 11; zlib.constants.BROTLI_DEFAULT_QUALITY
+     * is defined as 6; brief study of data (N = 784) from GitHub NGINX setting
+     * show Mode at 6; Android also sets this as the default 6 in init if
+     * undefined kBrotliDefaultQuality
+     */
+    compressionLevel: 6,
+    pattern: '**/*.{mjs,js,jsx,css,html}',
+    exclude: '',
+    filename: '',
+    writeFile: true,
+    columnWidth: 20,
+  };
+
+  const options = { ...__defaultOptions, ...args };
   let { pattern, exclude, compression } = options;
-  options.filename = options.filename || `.rollup-plugin-asset-build-size-compare-data-${options.compression}.json`;
+
+  // always overwrite this from the default options to get it right even if
+  // no filename is defined
+  options.filename =
+    options.filename ||
+    `.rollup-plugin-asset-build-size-compare-data-${options.compression}.json`;
+
+  // generate a path for later use as this is inner scope
   const filename = path.join(process.cwd(), options.filename);
+
   let initialSizes;
   let isSingleChunk;
 
+  /**
+   * Capture initial file sizes before writing output bundle.
+   * @param {OutputOptions} outputOptions
+   * @param {OutputBundle} bundle
+   */
   async function generateBundle(outputOptions, bundle) {
     const _path = outputOptions.dir
       ? path.resolve(outputOptions.dir)
       : path.dirname(outputOptions.file);
 
-    let chunks = Object.values(bundle)
-      .filter((outputFile) => outputFile.type === 'chunk');
+    let chunks = Object.values(bundle).filter(
+      (outputFile) => outputFile.type === 'chunk',
+    );
     isSingleChunk = chunks.length === 1;
     if (isSingleChunk) {
       pattern = chunks[0].fileName;
@@ -74,15 +150,25 @@ function bundleSize(_options) {
     outputSizes(bundle).catch(console.error);
   }
 
+  /**
+   * Load existing asset build size data from disk or scan current build sizes
+   * @param {string} outputPath - Output directory
+   * @returns {Promise<Record<string, number>>} Map of file sizes
+   */
   async function load(outputPath) {
     const data = await readFromDisk(filename);
     if (data.length) {
       const [{ files }] = data;
-      return toFileMap(files);
+      return __utils.toFileMap(files);
     }
     return getSizes(outputPath);
   }
 
+  /**
+   * Read asset build data from our ASBC JSON file
+   * @param {string} filename - ASBC JSON file path
+   * @returns {Promise<Array<{ timestamp: number, files: any[] }>>}
+   */
   async function readFromDisk(filename) {
     try {
       if (!options.writeFile) {
@@ -95,44 +181,71 @@ function bundleSize(_options) {
     }
   }
 
+  /**
+   * Get ASBC data for matched asset files
+   * @param {string} cwd - Current working directory to search for files
+   * @returns {Promise<Record<string, number|null>>}
+   */
   async function getSizes(cwd) {
     const files = await glob(pattern, { cwd, ignore: exclude });
 
     const sizes = await Promise.all(
-      filterFiles(files).map(async file => {
-        const source = await fs.promises.readFile(path.join(cwd, file)).catch(() => null);
+      filterFiles(files).map(async (file) => {
+        const source = await fs.promises
+          .readFile(path.join(cwd, file))
+          .catch(() => null);
         if (source == null) return null;
         return getCompressedSize(source);
-      })
+      }),
     );
 
-    return toMap(files, sizes);
+    return __utils.toMap(files, sizes);
   }
 
+  /**
+   * Compress a file buffer and return its size using the chosen compression
+   * @param {Buffer} source - File contents
+   * @returns {Promise<number>} Compressed byte length
+   */
   async function getCompressedSize(source) {
     let compressed = source;
     if (compression === 'gzip') {
       const gz = promisify(zlib.gzip);
-      compressed = await gz(source, GZIP_OPTS);
-    }
-    else if (compression === 'brotli') {
-      if (!zlib.brotliCompress) throw Error('Brotli not supported in this Node version.');
+      compressed = await gz(source, {
+        level: options.compressionLevel,
+      });
+    } else if (compression === 'brotli') {
+      if (!zlib.brotliCompress)
+        throw Error('Brotli not supported in this Node version.');
       const br = promisify(zlib.brotliCompress);
-      compressed = await br(source, BROTLI_OPTS);
+      compressed = await br(source, {
+        params: {
+          [zlib.constants.BROTLI_PARAM_QUALITY]: options.compressionLevel,
+        },
+      });
     }
     return Buffer.byteLength(compressed);
   }
 
+  /**
+   * Filter asset filenames using include/exclude patterns
+   * @param {string[]} files - List of file paths
+   * @returns {string[]} Filtered file paths
+   */
   function filterFiles(files) {
     const isMatched = minimatch.filter(pattern);
     const isExcluded = exclude ? minimatch.filter(exclude) : () => false;
-    return files.filter(file => isMatched(file) && !isExcluded(file));
+    return files.filter((file) => isMatched(file) && !isExcluded(file));
   }
 
+  /**
+   * Write ABSC to disk if any file sizes changed
+   * @param {string} filename - File path to write our SON
+   * @param {{ timestamp: number, files: any[] }} stats - File compression data
+   * @returns {Promise<void>}
+   */
   async function writeToDisk(filename, stats) {
-    if (
-      stats.files.some(file => file.diff !== 0)
-    ) {
+    if (stats.files.some((file) => file.diff !== 0)) {
       const data = await readFromDisk(filename);
       data.unshift(stats);
       if (options.writeFile) {
@@ -142,37 +255,51 @@ function bundleSize(_options) {
     }
   }
 
+  /**
+   * Save ABSC data for comparison later
+   * @param {Array<{ name: string, sizeBefore: number, size: number }>} files
+   * @returns {Promise<void>}
+   */
   async function save(files) {
     const stats = {
       timestamp: Date.now(),
-      files: files.map(file => ({
+      compressionType: options.compression,
+      files: files.map((file) => ({
         filename: file.name,
         previous: file.sizeBefore,
         size: file.size,
-        diff: file.size - file.sizeBefore
-      }))
+        diff: file.size - file.sizeBefore,
+      })),
     };
     options.save && (await options.save(stats));
     await writeToDisk(filename, stats);
   }
 
+  /**
+   * Compare sizes before/after and print formatted output
+   * @param {OutputBundle} assets
+   * @returns {Promise<void>}
+   */
   async function outputSizes(assets) {
     const sizesBefore = await Promise.resolve(initialSizes);
     const assetNames = filterFiles(Object.keys(assets));
     const sizes = await Promise.all(
-      assetNames.map(name => getCompressedSize(assets[name].code))
+      assetNames.map((name) => getCompressedSize(assets[name].code)),
     );
 
     // map of de-hashed filenames to their final size
-    const sizesAfter = toMap(assetNames, sizes);
+    const sizesAfter = __utils.toMap(assetNames, sizes);
 
     // get a list of unique filenames
     const files = [
       ...Object.keys(sizesBefore),
-      ...Object.keys(sizesAfter)
-    ].filter(dedupe);
+      ...Object.keys(sizesAfter),
+    ].filter(__utils.dedupe);
 
-    const width = Math.max(...files.map(file => file.length), defaults.columnWidth || 0);
+    const width = Math.max(
+      ...files.map((file) => file.length),
+      options.columnWidth || 0,
+    );
     let output = '';
     const items = [];
 
@@ -185,10 +312,10 @@ function bundleSize(_options) {
         size > 75 * 1024
           ? 'red'
           : size > 40 * 1024
-          ? 'yellow'
-          : size > 20 * 1024
-          ? 'cyan'
-          : 'green';
+            ? 'yellow'
+            : size > 20 * 1024
+              ? 'cyan'
+              : 'green';
       let sizeText = chalk[color](prettyBytes(size));
       let deltaText = '';
       if (delta && Math.abs(delta) > 1) {
@@ -212,7 +339,7 @@ function bundleSize(_options) {
         delta,
         deltaText,
         msg,
-        color
+        color,
       };
       items.push(item);
 
@@ -226,14 +353,16 @@ function bundleSize(_options) {
         // Remove newline for single file output.
         output = output.trimEnd();
       }
-      console.log(`Measured Delta in Asset Build Size - (using ${defaults.compression})`);
+      console.log(
+        `Measured Delta in Asset Build Size - (using ${options.compression}_comp_level: ${options.compressionLevel})`,
+      );
       console.log(output);
     }
   }
 
   return {
     name: 'rollup-plugin-asset-build-size-compare',
-    generateBundle
+    generateBundle,
   };
 }
 
