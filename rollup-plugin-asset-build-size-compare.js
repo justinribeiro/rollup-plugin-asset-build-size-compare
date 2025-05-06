@@ -264,6 +264,7 @@ function bundleSize(args) {
     const stats = {
       timestamp: Date.now(),
       compressionType: options.compression,
+      compressionLevel: options.compressionLevel,
       files: files.map((file) => ({
         filename: file.name,
         previous: file.sizeBefore,
