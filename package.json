@@ -1,6 +1,6 @@
 {
   "name": "@justinribeiro/rollup-plugin-asset-build-size-compare",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Track asset build sizes and compare over time with Rollup.",
   "author": "Justin Ribeiro <justin@justinribeiro.com>",
   "type": "module",

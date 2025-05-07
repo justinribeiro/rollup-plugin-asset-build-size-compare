@@ -8,16 +8,18 @@
 
 - Allows tracking build asset sizes, in either gzip, brotli, or no compression at all (don't ship your stuff that way!)
 - Sets more sane compression defaults based on
-- Allows setting custom compression targets to better match your web server compression settings
+- Allows setting custom compression targets to better match your web server compression settings ([additional information as to why](https://justinribeiro.com/chronicle/2025/05/06/a-tiny-analysis-of-nginx-compression-directives-and-a-new-rollup-web-asset-build-size-plugin/))
 - Writes a file to disk for easy tracking of size over time (e.g., .rollup-plugin-asset-build-size-compare-data-${options.compression}.json)
 - Color codes asset file sizes in out (red > 75kB, yellow > 40kB, cyan > 20kB, green < 20kB) to remind you that performance matters (and you should care)
 
 ## Installation
 
-Install `justinribeiro@/rollup-plugin-asset-build-size-compare` as a development dependency using npm:
+Install `justinribeiro@/rollup-plugin-asset-build-size-compare` as a development dependency from NPM:
 
 ```sh
 npm i -D justinribeiro@/rollup-plugin-asset-build-size-compare
+# or
+yarn add justinribeiro@/rollup-plugin-asset-build-size-compare --dev
 ```
 
 ## Quick Start
@@ -26,7 +28,7 @@ Add the plugin to your rollup configuration:
 
 ```diff
 // rollup.config.js
-+ import size from 'rollup-plugin-asset-build-size-compare';
++ import size from '@justinribeiro/rollup-plugin-asset-build-size-compare';
 
 plugins: [
 +   size()
