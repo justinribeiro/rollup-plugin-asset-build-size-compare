@@ -31,6 +31,9 @@ const glob = promisify(globPromise);
  * Default: `true`.
  * @property {number} columnWidth - Character width for console output
  * formatting. Default: `20`.
+ * @property {string} hashPattern - RegExp pattern that should have three
+ * capture groups (filename, hash, extension) so that you can create 1:1
+ * matching as needed with size compares. Default: ''
  */
 
 /**
@@ -66,19 +69,41 @@ const __utils = {
   },
 
   /**
-   * Converts an array of file objects into a map of filenames to file sizes,
-   * excluding zero-size files.
-   *
-   * @param {{ filename: string, size: number }[]} files - The array of file
-   * objects.
-   * @returns {{ [filename: string]: number }} An object mapping filenames to
-   * their sizes.
+   * Normalizes a filename by removing the hash portion while preserving the
+   * module name
+   * @param {string} filename - The filename with hash
+   * @param {string} hashPattern - RegExp pattern to match the hash; needs to be
+   * a three way match (module, hash, and extension)
+   * @returns {string} Filename with hash removed
    */
-  toFileMap: (files) => {
+  normalizeFilename: (filename, hashPattern) => {
+    if (hashPattern.length >= 1) {
+      return filename.replace(
+        new RegExp(String.raw`${hashPattern}`, 'gi'),
+        (match, moduleName, hash, fileExtension) => {
+          return `${moduleName}.${fileExtension}`;
+        },
+      );
+    }
+    return filename;
+  },
+
+  /**
+   * Converts an array of file objects into a map of normalized filenames to
+   * file sizes
+   * @param {{ filename: string, size: number }[]} files
+   * @param {string} hashPattern
+   * @returns {{ [filename: string]: number }}
+   */
+  toNormalizedFileMap: (files, hashPattern) => {
     return files.reduce((result, file) => {
       if (file.size) {
-        // exclude zero-size files
-        result[file.filename] = file.size;
+        const normalizedName = __utils.normalizeFilename(
+          file.filename,
+          hashPattern,
+        );
+        // If we already have this normalized name, sum the sizes
+        result[normalizedName] = (result[normalizedName] || 0) + file.size;
       }
       return result;
     }, {});
@@ -111,6 +136,7 @@ function bundleSize(args) {
     filename: '',
     writeFile: true,
     columnWidth: 20,
+    hashPattern: '',
   };
 
   const options = { ...__defaultOptions, ...args };
@@ -159,7 +185,7 @@ function bundleSize(args) {
     const data = await readFromDisk(filename);
     if (data.length) {
       const [{ files }] = data;
-      return __utils.toFileMap(files);
+      return __utils.toNormalizedFileMap(files, options.hashPattern);
     }
     return getSizes(outputPath);
   }
@@ -199,7 +225,11 @@ function bundleSize(args) {
       }),
     );
 
-    return __utils.toMap(files, sizes);
+    // Map normalized filenames to their sizes
+    return __utils.toMap(
+      files.map((name) => __utils.normalizeFilename(name, options.hashPattern)),
+      sizes,
+    );
   }
 
   /**
@@ -240,7 +270,7 @@ function bundleSize(args) {
 
   /**
    * Write ABSC to disk if any file sizes changed
-   * @param {string} filename - File path to write our SON
+   * @param {string} filename - File path to write our JSON
    * @param {{ timestamp: number, files: any[] }} stats - File compression data
    * @returns {Promise<void>}
    */
@@ -288,10 +318,15 @@ function bundleSize(args) {
       assetNames.map((name) => getCompressedSize(assets[name].code)),
     );
 
-    // map of de-hashed filenames to their final size
-    const sizesAfter = __utils.toMap(assetNames, sizes);
+    // Map of normalized filenames to their final size
+    const sizesAfter = __utils.toMap(
+      assetNames.map((name) =>
+        __utils.normalizeFilename(name, options.hashPattern),
+      ),
+      sizes,
+    );
 
-    // get a list of unique filenames
+    // Get list of unique normalized filenames
     const files = [
       ...Object.keys(sizesBefore),
       ...Object.keys(sizesAfter),

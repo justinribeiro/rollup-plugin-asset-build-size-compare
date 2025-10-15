@@ -11,6 +11,7 @@
 - Allows setting custom compression targets to better match your web server compression settings ([additional information as to why](https://justinribeiro.com/chronicle/2025/05/06/a-tiny-analysis-of-nginx-compression-directives-and-a-new-rollup-web-asset-build-size-plugin/))
 - Writes a file to disk for easy tracking of size over time (e.g., .rollup-plugin-asset-build-size-compare-data-${options.compression}.json)
 - Color codes asset file sizes in out (red > 75kB, yellow > 40kB, cyan > 20kB, green < 20kB) to remind you that performance matters (and you should care)
+- _v1.2.0_ Add `hashPattern` option to allow removal of hash from file name for easier compares.
 
 ## Installation
 
@@ -55,6 +56,7 @@ size({
   filename: '.rollup-plugin-asset-build-size-compare-data-brotli.json',
   writeFile: true,
   columnWidth: 20,
+  hashPattern: '^(.*)(.{10})(\.[^.]+)$',
 });
 ```
 
@@ -67,7 +69,7 @@ size({
 | `filename`               | The file name to write asset size data to disk. Supports template string `${options.compression}`. | `'.rollup-plugin-asset-build-size-compare-data-${options.compression}.json'` |
 | `writeFile`              | Whether to write the asset size data file to disk.                                                 | `true`                                                                       |
 | `columnWidth`            | The number of characters used for column width in console output.                                  | `20`                                                                         |
-
+| `hashPattern`            | A three group match pattern (filename, hash, extension) to remove hashes from build files          | ``                                                                           |
 
 ## License
 
