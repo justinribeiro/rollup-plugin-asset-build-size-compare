@@ -98,12 +98,7 @@ const __utils = {
   toNormalizedFileMap: (files, hashPattern) => {
     return files.reduce((result, file) => {
       if (file.size) {
-        const normalizedName = __utils.normalizeFilename(
-          file.filename,
-          hashPattern,
-        );
-        // If we already have this normalized name, sum the sizes
-        result[normalizedName] = (result[normalizedName] || 0) + file.size;
+        result[file.filename] = (result[file.filename] || 0) + file.size;
       }
       return result;
     }, {});
